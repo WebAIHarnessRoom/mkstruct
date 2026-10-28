@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""mkstruct GUI —— 图形界面的项目骨架生成器。"""
+"""mkstruct GUI —— 图形界面的项目骨架生成器（美化版）。"""
 
 from __future__ import annotations
 
@@ -17,22 +17,70 @@ from tkinter import filedialog, messagebox, ttk
 from core import __version__, prepare, create_all, Event, count_stats
 
 CONFIG_PATH = Path.home() / ".mkstruct_gui.json"
+ICON_REL = "resource/app.ico"
 
+
+# --------------------------------------------------------------------------- #
+# 资源路径
+# --------------------------------------------------------------------------- #
+def _resource_path(rel: str) -> Path:
+    """兼容源码运行与 PyInstaller onefile 的资源路径解析。"""
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return base / rel
+
+
+ICON_PATH = _resource_path(ICON_REL)
+
+
+# --------------------------------------------------------------------------- #
+# 配色（indigo 强调色，slate 中性色）
+# --------------------------------------------------------------------------- #
 LIGHT = {
-    "bg": "#f3f4f6", "fg": "#111827",
-    "input_bg": "#ffffff", "btn_bg": "#e5e7eb", "btn_active": "#d1d5db",
-    "accent": "#2563eb", "accent_active": "#1d4ed8", "accent_fg": "#ffffff",
-    "muted": "#6b7280",
-    "dir": "#1d4ed8", "file": "#15803d", "skip": "#6b7280",
-    "error": "#dc2626", "warn": "#b45309", "issue_bg": "#fee2e2",
+    "bg":        "#eef1f6",   # 页面背景
+    "panel_bg":  "#ffffff",   # 卡片/面板
+    "input_bg":  "#ffffff",   # 输入区
+    "fg":        "#1e293b",
+    "muted":     "#64748b",
+    "border":    "#dbe0e8",
+    "btn_bg":    "#f1f5f9",
+    "btn_hover": "#e2e8f0",
+    "btn_down":  "#cbd5e1",
+    "accent":        "#4f46e5",
+    "accent_hover":  "#4338ca",
+    "accent_down":   "#3730a3",
+    "accent_fg":     "#ffffff",
+    "accent_soft":   "#eef2ff",
+    "dir":       "#4f46e5",
+    "file":      "#059669",
+    "skip":      "#94a3b8",
+    "error":     "#dc2626",
+    "warn":      "#d97706",
+    "info":      "#0ea5e9",
+    "issue_bg":  "#fee2e2",
 }
+
 DARK = {
-    "bg": "#1f2937", "fg": "#e5e7eb",
-    "input_bg": "#111827", "btn_bg": "#374151", "btn_active": "#4b5563",
-    "accent": "#3b82f6", "accent_active": "#2563eb", "accent_fg": "#ffffff",
-    "muted": "#9ca3af",
-    "dir": "#60a5fa", "file": "#4ade80", "skip": "#9ca3af",
-    "error": "#f87171", "warn": "#fbbf24", "issue_bg": "#7f1d1d",
+    "bg":        "#0f172a",
+    "panel_bg":  "#1e293b",
+    "input_bg":  "#0f172a",
+    "fg":        "#e2e8f0",
+    "muted":     "#94a3b8",
+    "border":    "#334155",
+    "btn_bg":    "#334155",
+    "btn_hover": "#475569",
+    "btn_down":  "#64748b",
+    "accent":        "#6366f1",
+    "accent_hover":  "#818cf8",
+    "accent_down":   "#4f46e5",
+    "accent_fg":     "#ffffff",
+    "accent_soft":   "#312e81",
+    "dir":       "#818cf8",
+    "file":      "#34d399",
+    "skip":      "#64748b",
+    "error":     "#f87171",
+    "warn":      "#fbbf24",
+    "info":      "#38bdf8",
+    "issue_bg":  "#7f1d1d",
 }
 
 HELP_TEXT = """mkstruct GUI 使用说明
@@ -56,15 +104,30 @@ HELP_TEXT = """mkstruct GUI 使用说明
 """
 
 
+# --------------------------------------------------------------------------- #
+# 字体探测
+# --------------------------------------------------------------------------- #
+def _pick_ui_font() -> str:
+    families = set(tkfont.families())
+    for name in ("Microsoft YaHei UI", "Microsoft YaHei",
+                 "PingFang SC", "Segoe UI", "Helvetica Neue"):
+        if name in families:
+            return name
+    return "TkDefaultFont"
+
+
 def _pick_mono_font() -> str:
     families = set(tkfont.families())
-    for name in ("Cascadia Mono", "Consolas", "JetBrains Mono",
+    for name in ("Cascadia Mono", "JetBrains Mono", "Consolas",
                  "Menlo", "DejaVu Sans Mono", "Courier New"):
         if name in families:
             return name
     return "TkFixedFont"
 
 
+# --------------------------------------------------------------------------- #
+# 主应用
+# --------------------------------------------------------------------------- #
 class App:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -79,13 +142,17 @@ class App:
         self._running = False
         self._running_dry_run = True
         self._event_queue: queue.Queue = queue.Queue()
+        self._logo = None  # PhotoImage 引用，防止被 GC
 
-        self.mono_font = (_pick_mono_font(), 10)
+        self.ui_font = _pick_ui_font()
+        self.mono_font = _pick_mono_font()
 
         self._build_vars()
         self._build_ui()
         self._apply_theme()
         self._bind_shortcuts()
+
+        self._apply_window_icon(self.root)
 
         geo = self.config.get("geometry")
         if geo:
@@ -96,6 +163,26 @@ class App:
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self._schedule_parse()
+
+    # ------------------------------------------------------------------ #
+    # 窗口图标
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _apply_window_icon(window: tk.Misc) -> None:
+        if not ICON_PATH.is_file():
+            return
+        try:
+            window.iconbitmap(str(ICON_PATH))  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+    def _try_load_logo(self):
+        if not ICON_PATH.is_file():
+            return None
+        try:
+            return tk.PhotoImage(file=str(ICON_PATH))
+        except Exception:
+            return None
 
     # ------------------------------------------------------------------ #
     # 配置
@@ -128,7 +215,7 @@ class App:
         self.root.destroy()
 
     # ------------------------------------------------------------------ #
-    # 构建界面
+    # 变量
     # ------------------------------------------------------------------ #
     def _build_vars(self) -> None:
         self.dest_var = tk.StringVar(value=self.config.get("dest", str(Path.cwd())))
@@ -136,111 +223,166 @@ class App:
         self.show_tree_var = tk.BooleanVar(value=bool(self.config.get("show_tree", True)))
         self.dark_var = tk.BooleanVar(value=bool(self.config.get("dark", False)))
         self.status_var = tk.StringVar(value="就绪")
+        self.mode_var = tk.StringVar(value="预览模式")
 
+    # ------------------------------------------------------------------ #
+    # 构建界面
+    # ------------------------------------------------------------------ #
     def _build_ui(self) -> None:
-        self.root.title(f"mkstruct GUI {__version__}")
-        self.root.minsize(920, 600)
+        self.root.title(f"mkstruct GUI · v{__version__}")
+        self.root.minsize(1000, 640)
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(2, weight=1)
 
-        # --- 工具栏 ---
-        toolbar = ttk.Frame(self.root, padding=(8, 6, 8, 2))
-        toolbar.grid(row=0, column=0, sticky="ew")
-        toolbar.columnconfigure(4, weight=1)
+        self._build_toolbar()
+        self._build_options()
+        self._build_main()
+        self._build_status_bar()
 
-        self.btn_open = ttk.Button(toolbar, text="打开文件", command=self._open_file)
-        self.btn_open.grid(row=0, column=0, padx=(0, 4))
-        self.btn_paste = ttk.Button(toolbar, text="粘贴", command=self._paste)
-        self.btn_paste.grid(row=0, column=1, padx=4)
-        self.btn_clear = ttk.Button(toolbar, text="清空", command=self._clear_text)
-        self.btn_clear.grid(row=0, column=2, padx=4)
+    def _build_toolbar(self) -> None:
+        bar = ttk.Frame(self.root, style="Card.TFrame", padding=(12, 10))
+        bar.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 4))
+        bar.columnconfigure(6, weight=1)
 
-        ttk.Label(toolbar, text="目标目录:").grid(row=0, column=3, padx=(16, 4))
-        self.dest_entry = ttk.Entry(toolbar, textvariable=self.dest_var)
-        self.dest_entry.grid(row=0, column=4, sticky="ew", padx=4)
-        ttk.Button(toolbar, text="浏览…", command=self._browse_dest).grid(
-            row=0, column=5, padx=(4, 0))
+        col = 0
 
-        # --- 选项栏 ---
-        options = ttk.Frame(self.root, padding=(8, 2, 8, 4))
-        options.grid(row=1, column=0, sticky="ew")
-        options.columnconfigure(4, weight=1)
+        # 品牌区：logo + 标题
+        logo = self._try_load_logo()
+        if logo is not None:
+            self._logo = logo
+            ttk.Label(bar, image=logo, style="Card.TLabel").grid(
+                row=0, column=col, padx=(0, 8))
+            col += 1
+        ttk.Label(bar, text="mkstruct", style="Brand.TLabel").grid(
+            row=0, column=col, padx=(0, 16))
+        col += 1
 
-        ttk.Checkbutton(options, text="预览模式", variable=self.dry_run_var).grid(
-            row=0, column=0, padx=(0, 12))
-        ttk.Checkbutton(options, text="显示解析树", variable=self.show_tree_var,
-                        command=self._toggle_tree).grid(row=0, column=1, padx=(0, 12))
-        ttk.Checkbutton(options, text="深色模式", variable=self.dark_var,
-                        command=self._apply_theme).grid(row=0, column=2, padx=(0, 12))
+        ttk.Separator(bar, orient="vertical").grid(
+            row=0, column=col, sticky="ns", padx=(0, 14))
+        col += 1
 
-        self.btn_cli = ttk.Button(options, text="生成 CLI 命令", command=self._generate_cli)
-        self.btn_cli.grid(row=0, column=4, padx=4, sticky="e")
+        self.btn_open = ttk.Button(bar, text="打开文件", command=self._open_file)
+        self.btn_open.grid(row=0, column=col, padx=(0, 6)); col += 1
+        self.btn_paste = ttk.Button(bar, text="粘贴", command=self._paste)
+        self.btn_paste.grid(row=0, column=col, padx=6); col += 1
+        self.btn_clear = ttk.Button(bar, text="清空", command=self._clear_text)
+        self.btn_clear.grid(row=0, column=col, padx=6); col += 1
 
-        self.btn_preview = ttk.Button(options, text="预览", command=lambda: self._run(True))
-        self.btn_preview.grid(row=0, column=5, padx=4)
-        self.btn_create = ttk.Button(options, text="创建", style="Accent.TButton",
+        ttk.Separator(bar, orient="vertical").grid(
+            row=0, column=col, sticky="ns", padx=14); col += 1
+
+        ttk.Label(bar, text="目标目录", style="Muted.TLabel").grid(
+            row=0, column=col, padx=(0, 8)); col += 1
+        self.dest_entry = ttk.Entry(bar, textvariable=self.dest_var)
+        self.dest_entry.grid(row=0, column=col, sticky="ew", padx=(0, 8)); col += 1
+        ttk.Button(bar, text="浏览…", command=self._browse_dest).grid(
+            row=0, column=col)
+
+    def _build_options(self) -> None:
+        bar = ttk.Frame(self.root, style="Card.TFrame", padding=(12, 8))
+        bar.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 4))
+        bar.columnconfigure(3, weight=1)
+
+        ttk.Checkbutton(bar, text="预览模式",
+                        variable=self.dry_run_var).grid(row=0, column=0, padx=(0, 18))
+        ttk.Checkbutton(bar, text="显示解析树",
+                        variable=self.show_tree_var,
+                        command=self._toggle_tree).grid(row=0, column=1, padx=(0, 18))
+        ttk.Checkbutton(bar, text="深色模式",
+                        variable=self.dark_var,
+                        command=self._apply_theme).grid(row=0, column=2)
+
+        self.btn_cli = ttk.Button(bar, text="生成 CLI 命令", command=self._generate_cli)
+        self.btn_cli.grid(row=0, column=4, padx=(8, 6))
+        self.btn_preview = ttk.Button(bar, text="预览", command=lambda: self._run(True))
+        self.btn_preview.grid(row=0, column=5, padx=6)
+        self.btn_create = ttk.Button(bar, text="创建", style="Accent.TButton",
                                      command=lambda: self._run(False))
-        self.btn_create.grid(row=0, column=6, padx=(4, 0))
+        self.btn_create.grid(row=0, column=6)
 
-        # --- 主分栏 ---
+    def _make_panel(self, parent, title: str):
+        panel = ttk.Frame(parent, style="Card.TFrame")
+        panel.rowconfigure(1, weight=1)
+        panel.columnconfigure(0, weight=1)
+
+        header = ttk.Frame(panel, style="Card.TFrame")
+        header.grid(row=0, column=0, sticky="ew")
+        ttk.Label(header, text=title, style="PanelTitle.TLabel").pack(
+            side="left", padx=14, pady=(10, 6))
+
+        body = ttk.Frame(panel, style="Card.TFrame")
+        body.grid(row=1, column=0, sticky="nsew")
+        body.rowconfigure(0, weight=1)
+        body.columnconfigure(0, weight=1)
+        return panel, body
+
+    def _build_main(self) -> None:
         self.main_paned = ttk.PanedWindow(self.root, orient="horizontal")
-        self.main_paned.grid(row=2, column=0, sticky="nsew", padx=8, pady=(0, 6))
+        self.main_paned.grid(row=2, column=0, sticky="nsew", padx=10, pady=4)
 
         # 左：结构文本
-        left = ttk.Frame(self.main_paned)
-        left.rowconfigure(0, weight=1)
-        left.columnconfigure(0, weight=1)
+        left_panel, left_body = self._make_panel(self.main_paned, "结构文本")
+        self.main_paned.add(left_panel, weight=1)
 
-        self.text = tk.Text(left, wrap="none", undo=True, font=self.mono_font,
-                            relief="flat", padx=8, pady=6, insertwidth=2)
-        self.text.grid(row=0, column=0, sticky="nsew")
-        text_vs = ttk.Scrollbar(left, orient="vertical", command=self.text.yview)
-        text_vs.grid(row=0, column=1, sticky="ns")
-        text_hs = ttk.Scrollbar(left, orient="horizontal", command=self.text.xview)
-        text_hs.grid(row=1, column=0, sticky="ew")
+        self.text = tk.Text(left_body, wrap="none", undo=True, font=(self.mono_font, 10),
+                            relief="flat", borderwidth=0,
+                            padx=12, pady=8, insertwidth=2, highlightthickness=0)
+        self.text.grid(row=0, column=0, sticky="nsew", padx=(12, 0), pady=(0, 12))
+        text_vs = ttk.Scrollbar(left_body, orient="vertical", command=self.text.yview)
+        text_vs.grid(row=0, column=1, sticky="ns", padx=(0, 12), pady=(0, 12))
+        text_hs = ttk.Scrollbar(left_body, orient="horizontal", command=self.text.xview)
+        text_hs.grid(row=1, column=0, sticky="ew", padx=(12, 0), pady=(0, 12))
         self.text.configure(yscrollcommand=text_vs.set, xscrollcommand=text_hs.set)
         self.text.bind("<<Modified>>", self._on_text_modified)
-        self.main_paned.add(left, weight=1)
 
-        # 右：解析树 + 日志
+        # 右：垂直 paned（树 + 日志）
         self.right_paned = ttk.PanedWindow(self.main_paned, orient="vertical")
         self.main_paned.add(self.right_paned, weight=1)
 
-        self.tree_frame = ttk.Frame(self.right_paned)
-        self.tree_frame.rowconfigure(0, weight=1)
-        self.tree_frame.columnconfigure(0, weight=1)
-
-        self.tree = ttk.Treeview(self.tree_frame, columns=("type",),
+        self.tree_frame, tree_body = self._make_panel(self.right_paned, "解析预览")
+        self.tree = ttk.Treeview(tree_body, columns=("type",),
                                  show="tree headings", selectmode="browse")
         self.tree.heading("#0", text="名称", anchor="w")
         self.tree.heading("type", text="类型", anchor="center")
         self.tree.column("#0", width=340, stretch=True)
-        self.tree.column("type", width=72, anchor="center", stretch=False)
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        tree_vs = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
-        tree_vs.grid(row=0, column=1, sticky="ns")
+        self.tree.column("type", width=76, anchor="center", stretch=False)
+        self.tree.grid(row=0, column=0, sticky="nsew", padx=(12, 0), pady=(0, 12))
+        tree_vs = ttk.Scrollbar(tree_body, orient="vertical", command=self.tree.yview)
+        tree_vs.grid(row=0, column=1, sticky="ns", padx=(0, 12), pady=(0, 12))
         self.tree.configure(yscrollcommand=tree_vs.set)
 
-        log_frame = ttk.Frame(self.right_paned)
-        log_frame.rowconfigure(0, weight=1)
-        log_frame.columnconfigure(0, weight=1)
-
-        self.log = tk.Text(log_frame, wrap="word", font=self.mono_font,
-                           state="disabled", relief="flat", padx=8, pady=6)
-        self.log.grid(row=0, column=0, sticky="nsew")
-        log_vs = ttk.Scrollbar(log_frame, orient="vertical", command=self.log.yview)
-        log_vs.grid(row=0, column=1, sticky="ns")
+        log_panel, log_body = self._make_panel(self.right_paned, "执行日志")
+        self.log = tk.Text(log_body, wrap="word", font=(self.mono_font, 10),
+                           state="disabled", relief="flat", borderwidth=0,
+                           padx=12, pady=8, highlightthickness=0)
+        self.log.grid(row=0, column=0, sticky="nsew", padx=(12, 0), pady=(0, 12))
+        log_vs = ttk.Scrollbar(log_body, orient="vertical", command=self.log.yview)
+        log_vs.grid(row=0, column=1, sticky="ns", padx=(0, 12), pady=(0, 12))
         self.log.configure(yscrollcommand=log_vs.set)
 
-        self.right_paned.add(log_frame, weight=1)
         if self.show_tree_var.get():
-            self.right_paned.insert(0, self.tree_frame, weight=3)
+            self.right_paned.add(self.tree_frame, weight=3)
+        self.right_paned.add(log_panel, weight=2)
 
-        # --- 状态栏 ---
-        self.status_label = tk.Label(self.root, textvariable=self.status_var,
-                                     anchor="w", padx=10, pady=4)
-        self.status_label.grid(row=3, column=0, sticky="ew")
+    def _build_status_bar(self) -> None:
+        bar = ttk.Frame(self.root, style="Card.TFrame", padding=(14, 7))
+        bar.grid(row=3, column=0, sticky="ew", padx=10, pady=(4, 10))
+        bar.columnconfigure(0, weight=1)
+
+        self.status_label = tk.Label(bar, textvariable=self.status_var,
+                                     anchor="w", borderwidth=0, font=(self.ui_font, 9))
+        self.status_label.grid(row=0, column=0, sticky="ew")
         self.status_label.bind("<Button-1>", self._jump_to_issue)
+
+        self.mode_label = ttk.Label(bar, textvariable=self.mode_var,
+                                    style="Muted.TLabel")
+        self.mode_label.grid(row=0, column=1, sticky="e", padx=(12, 0))
+
+        self.dry_run_var.trace_add("write", lambda *_: self._update_mode_label())
+        self._update_mode_label()
+
+    def _update_mode_label(self) -> None:
+        self.mode_var.set("预览模式" if self.dry_run_var.get() else "写入模式")
 
     # ------------------------------------------------------------------ #
     # 主题
@@ -255,51 +397,113 @@ class App:
         except tk.TclError:
             pass
 
-        style.configure(".", background=c["bg"], foreground=c["fg"])
-        style.configure("TFrame", background=c["bg"])
-        style.configure("TLabel", background=c["bg"], foreground=c["fg"])
-        style.configure("TButton", background=c["btn_bg"], foreground=c["fg"],
-                        padding=(10, 4), borderwidth=0)
-        style.map("TButton", background=[("active", c["btn_active"]),
-                                          ("disabled", c["bg"])],
-                  foreground=[("disabled", c["muted"])])
-        style.configure("Accent.TButton", background=c["accent"],
-                        foreground=c["accent_fg"], padding=(14, 5))
-        style.map("Accent.TButton",
-                  background=[("active", c["accent_active"]),
-                              ("disabled", c["muted"])])
-        style.configure("TCheckbutton", background=c["bg"], foreground=c["fg"])
-        style.map("TCheckbutton", background=[("active", c["bg"])])
-        style.configure("TEntry", fieldbackground=c["input_bg"], foreground=c["fg"],
-                        insertcolor=c["fg"], borderwidth=0)
-        style.configure("TPanedwindow", background=c["bg"])
-        style.configure("Treeview", background=c["input_bg"],
-                        fieldbackground=c["input_bg"], foreground=c["fg"],
-                        borderwidth=0, rowheight=24)
-        style.configure("Treeview.Heading", background=c["btn_bg"],
-                        foreground=c["fg"], borderwidth=0)
-        style.map("Treeview",
-                  background=[("selected", c["accent"])],
-                  foreground=[("selected", c["accent_fg"])])
+        # 全局
+        style.configure(".", background=c["bg"], foreground=c["fg"],
+                        font=(self.ui_font, 10))
 
+        # 卡片 / 面板
+        style.configure("Card.TFrame", background=c["panel_bg"], relief="flat", borderwidth=0)
+        style.configure("Card.TLabel", background=c["panel_bg"], foreground=c["fg"])
+        style.configure("Muted.TLabel", background=c["panel_bg"],
+                        foreground=c["muted"], font=(self.ui_font, 9))
+        style.configure("PanelTitle.TLabel", background=c["panel_bg"],
+                        foreground=c["muted"], font=(self.ui_font, 9, "bold"))
+        style.configure("Brand.TLabel", background=c["panel_bg"],
+                        foreground=c["accent"], font=(self.ui_font, 13, "bold"))
+
+        # 按钮
+        style.configure("TButton", background=c["btn_bg"], foreground=c["fg"],
+                        padding=(12, 6), borderwidth=0, focuscolor="none",
+                        font=(self.ui_font, 9))
+        style.map("TButton",
+                  background=[("active", c["btn_hover"]),
+                              ("pressed", c["btn_down"]),
+                              ("disabled", c["panel_bg"])],
+                  foreground=[("disabled", c["muted"])])
+
+        style.configure("Accent.TButton", background=c["accent"],
+                        foreground=c["accent_fg"], padding=(18, 6),
+                        borderwidth=0, focuscolor="none",
+                        font=(self.ui_font, 9, "bold"))
+        style.map("Accent.TButton",
+                  background=[("active", c["accent_hover"]),
+                              ("pressed", c["accent_down"]),
+                              ("disabled", c["muted"])],
+                  foreground=[("disabled", c["panel_bg"])])
+
+        # Checkbutton
+        style.configure("TCheckbutton", background=c["panel_bg"],
+                        foreground=c["fg"], focuscolor="none",
+                        font=(self.ui_font, 9))
+        style.map("TCheckbutton",
+                  background=[("active", c["panel_bg"])],
+                  indicatorcolor=[("selected", c["accent"]),
+                                  ("!selected", c["input_bg"])])
+
+        # Entry
+        style.configure("TEntry", fieldbackground=c["input_bg"],
+                        foreground=c["fg"], insertcolor=c["fg"],
+                        bordercolor=c["border"], lightcolor=c["border"],
+                        darkcolor=c["border"], padding=(8, 6),
+                        font=(self.ui_font, 9))
+        style.map("TEntry",
+                  bordercolor=[("focus", c["accent"])],
+                  lightcolor=[("focus", c["accent"])],
+                  darkcolor=[("focus", c["accent"])])
+
+        # Separator
+        style.configure("TSeparator", background=c["border"])
+
+        # PanedWindow
+        style.configure("TPanedwindow", background=c["bg"])
+
+        # Treeview
+        style.configure("Treeview",
+                        background=c["input_bg"], fieldbackground=c["input_bg"],
+                        foreground=c["fg"], borderwidth=0, rowheight=28,
+                        font=(self.ui_font, 10))
+        style.configure("Treeview.Heading",
+                        background=c["btn_bg"], foreground=c["fg"],
+                        borderwidth=0, padding=(10, 8),
+                        font=(self.ui_font, 9, "bold"))
+        style.map("Treeview.Heading", background=[("active", c["btn_hover"])])
+        style.map("Treeview",
+                  background=[("selected", c["accent_soft"])],
+                  foreground=[("selected", c["fg"])])
+
+        # 滚动条
+        for orient in ("Vertical", "Horizontal"):
+            style.configure(f"{orient}.TScrollbar",
+                            background=c["btn_bg"], troughcolor=c["panel_bg"],
+                            bordercolor=c["panel_bg"], arrowcolor=c["muted"],
+                            lightcolor=c["btn_bg"], darkcolor=c["btn_bg"],
+                            width=12, arrowsize=12)
+            style.map(f"{orient}.TScrollbar",
+                      background=[("active", c["btn_hover"])])
+
+        # 顶层背景
         self.root.configure(bg=c["bg"])
 
-        self.text.configure(bg=c["input_bg"], fg=c["fg"],
-                            insertbackground=c["fg"],
-                            selectbackground=c["accent"],
-                            selectforeground=c["accent_fg"])
-        self.log.configure(bg=c["input_bg"], fg=c["fg"],
-                           selectbackground=c["accent"],
-                           selectforeground=c["accent_fg"])
+        # 文本区
+        for w in (self.text, self.log):
+            w.configure(bg=c["input_bg"], fg=c["fg"],
+                        insertbackground=c["fg"],
+                        selectbackground=c["accent"],
+                        selectforeground=c["accent_fg"])
 
+        # 日志颜色
         for tag in ("dir", "file", "skip", "error", "warn", "info", "accent", "muted"):
             self.log.tag_configure(tag, foreground=c.get(tag, c["fg"]))
         self.text.tag_configure("issue", background=c["issue_bg"])
 
+        # 树节点颜色
         self.tree.tag_configure("dir", foreground=c["dir"])
         self.tree.tag_configure("file", foreground=c["file"])
 
-        self.status_label.configure(bg=c["bg"], fg=c["fg"])
+        # 状态栏
+        self.status_label.configure(bg=c["panel_bg"], fg=c["fg"])
+        self._set_status(self.status_var.get(),
+                         "error" if "无效" in self.status_var.get() else "fg")
 
     def _toggle_tree(self) -> None:
         if self.show_tree_var.get():
@@ -318,19 +522,14 @@ class App:
         self.root.bind("<Control-O>", lambda e: self._open_file())
         self.root.bind("<Control-l>", lambda e: self._clear_log())
         self.root.bind("<F1>", lambda e: self._show_help())
-
-        self.text.bind("<Control-Return>", self._on_ctrl_enter)
-        self.text.bind("<Control-Shift-Return>", self._on_ctrl_shift_enter)
         self.root.bind("<Control-Return>", self._on_ctrl_enter)
         self.root.bind("<Control-Shift-Return>", self._on_ctrl_shift_enter)
 
     def _on_ctrl_enter(self, event=None):
-        self._run(True)
-        return "break"
+        self._run(True); return "break"
 
     def _on_ctrl_shift_enter(self, event=None):
-        self._run(False)
-        return "break"
+        self._run(False); return "break"
 
     # ------------------------------------------------------------------ #
     # 文本与解析
@@ -383,16 +582,14 @@ class App:
             self.text.tag_add("issue", f"{line}.0", f"{line}.end")
 
     def _update_status(self, text: str) -> None:
-        raw = text.strip()
-        dest = self.dest_var.get().strip() or "."
-
         if self._busy:
             return
+        raw = text.strip()
+        dest = self.dest_var.get().strip() or "."
 
         if not raw:
             self._set_status("就绪", "muted")
             return
-
         if not self._prepared or not self._prepared.entries:
             self._set_status("未解析出有效的结构行", "error")
             return
@@ -403,7 +600,7 @@ class App:
             n = self._issues[0].line_no
             self._set_status(f"{base} · 第 {n} 行无法解析（点击定位）", "warn")
         else:
-            self._set_status(base, "ok")
+            self._set_status(base, "fg")
 
     def _set_status(self, text: str, kind: str = "fg") -> None:
         self.status_var.set(text)
@@ -447,13 +644,15 @@ class App:
         path = filedialog.askopenfilename(
             title="选择结构文本",
             filetypes=[("文本文件", "*.txt *.md *.text"), ("所有文件", "*.*")],
+            parent=self.root,
         )
         if not path:
             return
         try:
             content = Path(path).read_text(encoding="utf-8")
         except Exception as e:
-            messagebox.showerror("读取失败", f"无法读取文件：\n{path}\n\n{e}")
+            messagebox.showerror("读取失败", f"无法读取文件：\n{path}\n\n{e}",
+                                 parent=self.root)
             return
         self._set_text(content)
         self.source_path = path
@@ -466,10 +665,12 @@ class App:
         try:
             content = self.root.clipboard_get()
         except tk.TclError:
-            messagebox.showinfo("粘贴", "剪贴板中没有文本内容。")
+            messagebox.showinfo("粘贴", "剪贴板中没有文本内容。", parent=self.root)
             return
         if self.text.get("1.0", "end-1c").strip():
-            if not messagebox.askyesno("粘贴", "当前结构文本非空，粘贴将覆盖现有内容。是否继续？"):
+            if not messagebox.askyesno("粘贴",
+                                       "当前结构文本非空，粘贴将覆盖现有内容。是否继续？",
+                                       parent=self.root):
                 return
         self._set_text(content)
         self.source_path = None
@@ -481,14 +682,14 @@ class App:
             return
         if not self.text.get("1.0", "end-1c").strip():
             return
-        if not messagebox.askyesno("清空", "确定清空结构文本？"):
+        if not messagebox.askyesno("清空", "确定清空结构文本？", parent=self.root):
             return
         self._set_text("")
         self.source_path = None
         self._schedule_parse()
 
     def _browse_dest(self) -> None:
-        path = filedialog.askdirectory(title="选择目标目录")
+        path = filedialog.askdirectory(title="选择目标目录", parent=self.root)
         if path:
             self.dest_var.set(path)
             self._update_status(self.text.get("1.0", "end-1c"))
@@ -499,7 +700,7 @@ class App:
         self.log.configure(state="disabled")
 
     def _show_help(self) -> None:
-        messagebox.showinfo("帮助", HELP_TEXT)
+        messagebox.showinfo("帮助", HELP_TEXT, parent=self.root)
 
     # ------------------------------------------------------------------ #
     # 日志
@@ -525,7 +726,7 @@ class App:
         else:
             text = self.text.get("1.0", "end-1c")
             if not text.strip():
-                messagebox.showwarning("生成 CLI 命令", "结构文本为空。")
+                messagebox.showwarning("生成 CLI 命令", "结构文本为空。", parent=self.root)
                 return
             escaped = text.replace('"', '\\"')
             parts.append(f'-s "{escaped}"')
@@ -552,7 +753,7 @@ class App:
         self._parse_now()
 
         if not self._prepared or not self._prepared.entries:
-            messagebox.showwarning("无法执行", "未解析出任何有效的结构行。")
+            messagebox.showwarning("无法执行", "未解析出任何有效的结构行。", parent=self.root)
             return
 
         dest = Path(self.dest_var.get().strip() or ".").expanduser()
@@ -564,7 +765,7 @@ class App:
                 probe.touch()
                 probe.unlink()
             except Exception as e:
-                messagebox.showerror("目标目录不可写", f"{dest}\n\n{e}")
+                messagebox.showerror("目标目录不可写", f"{dest}\n\n{e}", parent=self.root)
                 return
 
             dirs, files = count_stats(self._prepared.forest)
@@ -613,38 +814,37 @@ class App:
                     return
         except queue.Empty:
             pass
-
         if self._running:
             self.root.after(50, self._poll_events)
 
     def _log_event(self, ev: Event, dry_run: bool) -> None:
         if ev.type == "dir":
             if dry_run:
-                self._log(f"  [dir ] {ev.path}", "dir")
+                self._log(f"  ▸ [dir ] {ev.path}", "dir")
             elif ev.created:
-                self._log(f"  mkdir  {ev.path}", "dir")
+                self._log(f"  ▸ mkdir  {ev.path}", "dir")
             else:
-                self._log(f"  exist  {ev.path}", "skip")
+                self._log(f"  ▸ exist  {ev.path}", "skip")
         elif ev.type == "file":
             if dry_run:
-                self._log(f"  [file] {ev.path}", "file")
+                self._log(f"  • [file] {ev.path}", "file")
             else:
-                self._log(f"  file   {ev.path}", "file")
+                self._log(f"  • file   {ev.path}", "file")
         elif ev.type == "skip":
-            self._log(f"  [skip] {ev.path}  (已存在)", "skip")
+            self._log(f"  ○ [skip] {ev.path}  (已存在)", "skip")
 
     def _finish_run(self, dry_run: bool, stats: dict) -> None:
         self._running = False
         tail = f"，跳过 {stats['skipped']} 个已存在文件" if stats["skipped"] else ""
         msg = f"完成：{stats['dirs']} 个目录，{stats['files']} 个文件{tail}"
-        self._log(msg, "info" if dry_run else "accent")
+        self._log(msg, "accent" if not dry_run else "info")
         self._set_busy(False)
-        self._set_status(msg, "ok")
+        self._set_status(msg, "file" if not dry_run else "info")
 
     def _fail_run(self, exc: Exception) -> None:
         self._running = False
-        self._log(f"执行失败：{exc}", "error")
-        messagebox.showerror("执行失败", str(exc))
+        self._log(f"✕ 执行失败：{exc}", "error")
+        messagebox.showerror("执行失败", str(exc), parent=self.root)
         self._set_busy(False)
 
     def _confirm_create(self, dest: Path, dirs: int, files: int) -> bool:
@@ -653,32 +853,38 @@ class App:
         dlg.transient(self.root)
         dlg.resizable(False, False)
         dlg.grab_set()
+        self._apply_window_icon(dlg)
 
         c = self.colors
         dlg.configure(bg=c["bg"])
-        frm = ttk.Frame(dlg, padding=16)
+        frm = ttk.Frame(dlg, style="Card.TFrame", padding=20)
         frm.pack(fill="both", expand=True)
 
-        ttk.Label(frm, text="即将写入磁盘", font=("", 11, "bold")).pack(anchor="w")
-        ttk.Label(frm, text=f"目标位置：{dest.resolve()}").pack(anchor="w", pady=(10, 2))
-        ttk.Label(frm, text=f"将创建：{dirs} 个目录，{files} 个文件").pack(anchor="w")
+        tk.Label(frm, text="即将写入磁盘", bg=c["panel_bg"], fg=c["fg"],
+                 font=(self.ui_font, 12, "bold")).pack(anchor="w")
+        tk.Label(frm, text=f"目标位置：{dest.resolve()}",
+                 bg=c["panel_bg"], fg=c["muted"],
+                 font=(self.ui_font, 9)).pack(anchor="w", pady=(12, 2))
+        tk.Label(frm, text=f"将创建：{dirs} 个目录，{files} 个文件",
+                 bg=c["panel_bg"], fg=c["fg"],
+                 font=(self.ui_font, 10)).pack(anchor="w")
 
         confirm_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(frm, text="我已预览并确认写入",
-                        variable=confirm_var).pack(anchor="w", pady=(12, 8))
+                        variable=confirm_var).pack(anchor="w", pady=(16, 10))
 
         result = {"ok": False}
 
         def do_ok():
             if not confirm_var.get():
-                messagebox.showwarning(
-                    "确认创建", "请先勾选“我已预览并确认写入”。", parent=dlg)
+                messagebox.showwarning("确认创建", "请先勾选“我已预览并确认写入”。",
+                                       parent=dlg)
                 return
             result["ok"] = True
             dlg.destroy()
 
-        btns = ttk.Frame(frm)
-        btns.pack(anchor="e", pady=(8, 0))
+        btns = ttk.Frame(frm, style="Card.TFrame")
+        btns.pack(anchor="e", pady=(6, 0))
         ttk.Button(btns, text="取消", command=dlg.destroy).pack(side="left", padx=(0, 8))
         ttk.Button(btns, text="确认创建", style="Accent.TButton",
                    command=do_ok).pack(side="left")
@@ -700,7 +906,7 @@ def _install_excepthook(root: tk.Tk) -> None:
         except Exception:
             pass
         try:
-            messagebox.showerror("未处理的异常", msg)
+            messagebox.showerror("未处理的异常", msg, parent=root)
         except Exception:
             pass
     sys.excepthook = hook
@@ -709,7 +915,7 @@ def _install_excepthook(root: tk.Tk) -> None:
 def main() -> None:
     root = tk.Tk()
     try:
-        root.tk.call("tk", "scaling", 1.0)
+        root.tk.call("tk", "scaling", root.winfo_fpixels("1i") / 72)
     except Exception:
         pass
     _install_excepthook(root)

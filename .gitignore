@@ -6,3 +6,26 @@ dist/
 build/
 tree.txt
 out/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# IDE
+.idea/
+.vscode/
+
+# 项目生成物
+.project_context/
+
+# 系统
+.DS_Store
+Thumbs.db

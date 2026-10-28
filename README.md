@@ -1,92 +1,114 @@
 # mkstruct
 
+[![Latest Release](https://img.shields.io/github/v/release/WebAIHarnessRoom/mkstruct?label=release)](https://github.com/WebAIHarnessRoom/mkstruct/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 根据树形结构文本，一键创建目录与空文件的项目骨架生成器。
 
 把 `tree` 命令风格的目录树（或设计文档里常见的树形结构）直接粘贴给它，就能在指定位置批量创建出完整的目录和文件结构，省去手工 `mkdir` / `touch` 的重复劳动。
+
+提供 **命令行（CLI）** 与 **图形界面（GUI）** 两种形态，二者共享同一套解析与创建逻辑，行为完全一致。
+
+> （此处放一张 GUI 截图，建议尺寸 1200×720，展示左侧结构文本、右侧解析树、底部日志）
 
 ---
 
 ## 特性
 
+- **两种形态**：CLI 适合脚本与管道，GUI 适合可视化校对与交互确认。
 - **三种输入方式**：结构文本文件、命令行字符串、标准输入 / 管道 / 剪贴板。
 - **自动识别层级**：支持 `├──`、`└──`、`│`、`--`、空格缩进等多种树形画法，缩进宽度自动推断。
-- **目录以 `/` 结尾**：约定简单明确——带 `/` 结尾或有子节点的节点视为目录，其余视为文件。
+- **目录以 `/` 结尾**：带 `/` 结尾或有子节点的节点视为目录，其余视为文件，`Makefile`、`LICENSE` 这类无扩展名文件也能被正确识别。
 - **忽略行内注释**：`空格 + #` 之后的内容会被剥离，方便直接复用带说明文字的结构文本。
-- **简写自动展开**：`RtmpDataSource.h/.cpp` 这类写法会自动创建 `RtmpDataSource.h` 和 `RtmpDataSource.cpp` 两个文件。
-- **预览模式**：`--dry-run` 只显示将要创建的内容，不写磁盘。
+- **简写自动展开**：`RtmpDataSource.h/.cpp` 会自动创建 `RtmpDataSource.h` 和 `RtmpDataSource.cpp` 两个文件。
+- **实时预览**：GUI 输入即解析，右侧树视图实时呈现目录/文件判定结果。
+- **预览与写入分离**：`--dry-run` / GUI「预览」不写磁盘；正式写入前必须确认。
 - **幂等安全**：已存在的文件不会被覆盖，只会标记为 `skip`。
-- **零依赖**：仅使用 Python 标准库，单文件即可运行。
+- **零第三方依赖**：仅使用 Python 标准库。
 
 ---
 
-## 环境要求
+## 安装
 
-- Python 3.7 或更高版本（推荐 3.8+）
-- 无第三方依赖
+### 方式一：下载发布版可执行文件（推荐，最终用户）
 
----
+前往本项目的 **Releases** 页面下载最新版本：
 
-## 获取脚本
+- `mkstruct.exe` —— 命令行版本
+- `mkstruct-gui.exe` —— 图形界面版本
 
-将 `mkstruct.py` 保存到任意目录即可。如果想在任意位置直接调用，可以给它加上可执行权限并放入 `PATH`：
+两个文件均为独立单文件 exe，无需安装 Python 或任何依赖，下载后即可使用。
 
-```bash
-chmod +x mkstruct.py
-mv mkstruct.py /usr/local/bin/mkstruct
+**让 CLI 可以在任意位置调用**：把 `mkstruct.exe` 放到一个已在 `PATH` 中的目录（如 `C:\Tools\`），或把其所在目录加入系统环境变量 `PATH`，之后即可：
+
+```powershell
+mkstruct tree.txt -d .\out
 ```
 
-之后就可以直接用 `mkstruct` 代替 `python mkstruct.py`。
+**GUI 直接双击** `mkstruct-gui.exe` 启动。
+
+> 首次运行若被 Windows SmartScreen 或杀毒软件拦截，是因为单文件 exe 未做代码签名，属已知误报，可选择"仍要运行"或在杀软中添加信任。
+
+### 方式二：从源码运行（开发者）
+
+需要 Python 3.8 或更高版本，无第三方依赖。
+
+```bash
+git clone https://github.com/WebAIHarnessRoom/mkstruct.git
+cd mkstruct
+python mkstruct.py --help        # CLI
+python gui.py                     # GUI
+```
+
+> ⚠️ `mkstruct.py` 依赖同目录的 `core.py`，**不能单独拷走单个文件**。源码分发请整目录 clone。
+
+### 方式三：自行打包 exe
+
+参见 [`DEVELOPMENT.md`](DEVELOPMENT.md) 的「打包」一节。
 
 ---
 
 ## 快速开始
 
-假设当前目录下有一个 `tree.txt`，内容为：
+假设有一个 `tree.txt`，内容为：
 
 ```
 VideoPlayer/
 ├── CMakeLists.txt                  # 顶层CMake
 ├── cmake/
-│   ├── FindFFmpeg.cmake            # FFmpeg查找模块
-│   └── vcpkg.cmake                 # vcpkg工具链配置
-├── third_party/
-│   └── vcpkg/                      # vcpkg子模块（可选）
+│   ├── FindFFmpeg.cmake
+│   └── vcpkg.cmake
 ├── src/
-│   ├── main.cpp                    # 阶段一：控制台测试入口
-│   ├── common/
-│   │   ├── Logger.h                # 日志接口
-│   │   ├── Logger.cpp
-│   │   ├── ThreadSafeQueue.h       # 线程安全队列模板
-│   │   └── Types.h                 # 通用类型/枚举定义
-│   ├── datasource/
-│   │   ├── IDataSource.h           # 数据源抽象接口
-│   │   ├── StreamConfig.h          # 流配置结构
-│   │   └── RtmpDataSource.h/.cpp   # RTMP数据源实现
-│   ├── decoder/
-│   │   ├── VideoDecoder.h          # 解码器封装
-│   │   └── VideoDecoder.cpp
-│   └── session/
-│       └── DecodeSession.h/.cpp    # 阶段一简化版会话（仅接入+解码）
-├── tests/
-│   ├── test_thread_safe_queue.cpp  # 单元测试
-│   └── test_rtmp_decode.cpp        # 集成测试
+│   ├── main.cpp
+│   └── common/
+│       ├── Logger.h
+│       ├── Logger.cpp
+│       └── Types.h
 └── docs/
     ├── design_stage1.md
-    ├── todo_stage1.md
-    └── test_stage1.md
+    └── todo_stage1.md
 ```
 
-先预览，再创建：
+### CLI
 
 ```bash
-# 预览要创建的内容（不写磁盘）
-python mkstruct.py .\example\tree.txt -d .\example --dry-run
+# 先预览（不写磁盘）
+mkstruct tree.txt -d ./out --dry-run
 
-# 正式创建到当前目录
-python mkstruct.py .\example\tree.txt -d .\example
+# 确认后正式创建
+mkstruct tree.txt -d ./out
 ```
 
-执行完成后，当前目录下会多出完整的 `VideoPlayer/` 项目骨架。
+执行完成后，`./out/VideoPlayer/` 下会生成完整骨架。
+
+### GUI
+
+1. 双击 `mkstruct-gui.exe`（或 `python gui.py`）。
+2. 点击「打开文件」选择 `tree.txt`，或直接粘贴到左侧文本框。
+3. 右侧立即显示解析结果，核对目录/文件判定是否正确。
+4. 在工具栏填写「目标目录」（可用「浏览…」选择）。
+5. 点击「预览」在下方日志查看将创建的内容。
+6. 确认无误后点击「创建」，勾选「我已预览并确认写入」，提交。
 
 ---
 
@@ -127,11 +149,11 @@ RtmpDataSource.h
 RtmpDataSource.cpp
 ```
 
-展开规则：`/` 前面部分含 `.`，`/` 后面像纯扩展名（字母数字下划线）时才展开，避免误伤 `dir/.gitignore` 这类写法。
+展开规则：`/` 前面部分含 `.`、`/` 后面像纯扩展名（字母数字下划线）时才展开，避免误伤 `dir/.gitignore` 这类写法。
 
 ---
 
-## 命令行参数
+## 命令行参考
 
 ```
 usage: mkstruct [-h] [-s STRING] [-d DEST] [-n] [-q] [--show] [-V] [structure]
@@ -148,61 +170,96 @@ usage: mkstruct [-h] [-s STRING] [-d DEST] [-n] [-q] [--show] [-V] [structure]
 | `-V, --version` | 显示版本号并退出。 |
 | `-h, --help` | 显示帮助信息。 |
 
-优先级：`-s` > 位置参数 `structure` > 标准输入。
+**输入优先级**：`-s` > 位置参数 `structure` > 标准输入。
 
----
-
-## 使用示例
-
-### 从文件创建
+**常用示例：**
 
 ```bash
-python mkstruct.py tree.txt -d ./out
-```
+# 从文件创建
+mkstruct tree.txt -d ./out
 
-### 直接传入字符串
-
-```bash
-python mkstruct.py -s "src/
+# 直接传入字符串
+mkstruct -s "src/
 ├── main.py
 └── utils/
     └── helper.py" -d ./out
-```
 
-### 从标准输入 / 管道
-
-```bash
-# 手动粘贴后按 Ctrl-D（macOS/Linux）或 Ctrl-Z 回车（Windows）
-python mkstruct.py -d ./out
-
-# 从管道读取
-cat tree.txt | python mkstruct.py -d ./out
+# 从标准输入 / 管道
+cat tree.txt | mkstruct -d ./out
 
 # macOS：直接从剪贴板创建
-pbpaste | python mkstruct.py -d ./out
+pbpaste | mkstruct -d ./out
 
 # Windows PowerShell：从剪贴板创建
-Get-Clipboard | python mkstruct.py -d ./out
+Get-Clipboard | mkstruct -d ./out
+
+# 先预览再执行
+mkstruct tree.txt -d ./out --dry-run
+
+# 排查解析问题
+mkstruct tree.txt -d ./out --show --dry-run
+
+# 静默执行（适合脚本调用）
+mkstruct tree.txt -d ./out -q
 ```
 
-### 先预览再执行
+---
 
-```bash
-python mkstruct.py tree.txt -d ./out --dry-run
+## GUI 使用说明
+
+### 界面布局
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ [logo] mkstruct │ 打开文件 粘贴 清空 │ 目标目录 [________] [浏览…]  │
+├────────────────────────────────────────────────────────────────────┤
+│ ☑ 预览模式  ☑ 显示解析树  ☐ 深色模式  [生成 CLI 命令] [预览] [创建]│
+├──────────────────────────────┬─────────────────────────────────────┤
+│ 结构文本                      │ 解析预览                            │
+│ ┌──────────────────────────┐ │ ┌─────────────────────────────────┐ │
+│ │ VideoPlayer/             │ │ │ ▼ VideoPlayer/          [目录]  │ │
+│ │ ├── CMakeLists.txt       │ │ │   ├─ CMakeLists.txt     [文件]  │ │
+│ │ └── src/                 │ │ │   └─ src/               [目录]  │ │
+│ └──────────────────────────┘ │ └─────────────────────────────────┘ │
+│                              │ 执行日志                            │
+│                              │ ┌─────────────────────────────────┐ │
+│                              │ │ 目标位置：D:\out  [预览模式]    │ │
+│                              │ │   ▸ [dir ] D:\out\VideoPlayer   │ │
+│                              │ │   • [file] D:\out\...\main.cpp  │ │
+│                              │ │ 完成：2 个目录，2 个文件        │ │
+│                              │ └─────────────────────────────────┘ │
+├──────────────────────────────┴─────────────────────────────────────┤
+│ 已解析 2 个目录 / 2 个文件 · 目标: D:\out          预览模式         │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-### 排查解析问题
+### 关键行为
 
-```bash
-# 打印脚本眼中的目录树，确认层级和文件/目录判定是否符合预期
-python mkstruct.py tree.txt -d ./out --show --dry-run
-```
+- **实时解析**：输入后 300ms 自动解析，无需手动触发。解析不出有效行时状态栏变红，「预览」「创建」按钮禁用。
+- **错误行高亮**：无法解析的行在文本区背景标红，状态栏提示「第 N 行无法解析」，**点击状态栏可跳转到该行**。
+- **预览 vs 创建**：「预览」只列日志不写盘；「创建」会弹出确认对话框，**必须勾选「我已预览并确认写入」**才能提交，防止误点。
+- **已存在文件**：无论预览还是创建，已存在的文件都标为 `[skip]`，内容不会被覆盖。
+- **生成 CLI 命令**：把当前配置（输入来源、目标目录、预览模式）拼成一条命令并复制到剪贴板，方便脚本化或记入文档。
+- **深色模式**：勾选后立即切换，选择会持久化。
 
-### 静默执行（适合脚本调用）
+### 快捷键
 
-```bash
-python mkstruct.py tree.txt -d ./out -q
-```
+| 快捷键 | 动作 |
+| --- | --- |
+| `Ctrl+O` | 打开结构文本文件 |
+| `Ctrl+Enter` | 预览 |
+| `Ctrl+Shift+Enter` | 创建 |
+| `Ctrl+L` | 清空日志 |
+| `F1` | 显示帮助 |
+
+### 配置文件与日志
+
+| 文件 | 位置 | 作用 |
+| --- | --- | --- |
+| 配置 | `~/.mkstruct_gui.json` | 记住上次的目标目录、复选框状态、窗口大小、深色模式 |
+| 错误日志 | `~/mkstruct-gui-error.log` | GUI 未捕获异常的完整堆栈（正常使用时不会生成） |
+
+删除配置文件即可恢复默认状态。
 
 ---
 
@@ -240,7 +297,7 @@ python mkstruct.py tree.txt -d ./out -q
 
 ### Q：Windows 下中文注释乱码？
 
-脚本已经尝试将标准输出重新配置为 UTF-8。如果仍然乱码，可以在运行前执行：
+CLI 已经尝试将标准输出重新配置为 UTF-8。如果仍然乱码，可以在运行前执行：
 
 ```powershell
 chcp 65001
@@ -252,6 +309,44 @@ chcp 65001
 
 ### Q：如何把结构文本从 Markdown 代码块里直接喂给它？
 
-````bash
+```bash
 # 从 Markdown 文件中提取第一个代码块并创建
-awk '/^```/{f=!f;next} f' design.md | python mkstruct.py -d ./out
+awk '/^```/{f=!f;next} f' design.md | mkstruct -d ./out
+```
+
+### Q：GUI 里能看到图标，但 exe 在资源管理器里还是旧图标？
+
+Windows 图标缓存问题。把 exe 改名或复制到新目录即可强制刷新，或运行 `ie4uinit.exe -ClearIconCache` 后重启资源管理器。
+
+### Q：单文件 exe 启动比较慢？
+
+`--onefile` 模式首次运行需要把 Python 运行时释放到临时目录，通常有 0.5–2 秒延迟，属正常现象。对启动速度敏感可改用 `--onedir` 模式（`dist/mkstruct/` 目录整体分发）。
+
+---
+
+## 项目结构
+
+```
+mkstruct/
+├── core.py            # 核心逻辑：解析、组装、创建（无 I/O 打印）
+├── mkstruct.py        # CLI 入口
+├── gui.py             # GUI 入口（Tkinter）
+├── resource/
+│   └── app.ico        # 应用图标（CLI + GUI 共用）
+├── README.md          # 本文档
+├── DEVELOPMENT.md     # 开发与打包指南
+├── CHANGELOG.md       # 版本历史
+└── LICENSE            # MIT
+```
+
+---
+
+## 许可证
+
+[MIT](LICENSE)
+
+---
+
+## 致谢
+
+灵感来自反复手敲 `mkdir -p` 和 `touch` 的痛苦。
