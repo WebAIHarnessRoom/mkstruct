@@ -1,6 +1,6 @@
 # mkstruct
 
-[![Latest Release](https://img.shields.io/github/v/release/WebAIHarnessRoom/mkstruct?label=release)](https://github.com/WebAIHarnessRoom/mkstruct/releases)
+[![Latest Release](https://img.shields.io/github/v/release/<你的用户名>/mkstruct?label=release)](https://github.com/<你的用户名>/mkstruct/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 根据树形结构文本，一键创建目录与空文件的项目骨架生成器。

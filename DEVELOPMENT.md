@@ -303,20 +303,34 @@ LICENSE
 
 ## 发布流程
 
-发布包含两部分：**打 tag 并推送**、**在 GitHub 创建 Release 并上传 exe**。
+本项目当前处于 `0.x` 阶段，首个公开发布为 `v0.1.0`。发布包含两部分：**打 tag 并推送**、**在 GitHub 创建 Release 并上传 exe**。
 
 ### 1. 准备
 
-1. 更新 `core.py` 的 `__version__`（如 `1.4.0`）。
-2. 在 `CHANGELOG.md` 顶部新增该版本条目，并把文末的版本链接指向真实 tag。
+1. 确认 `core.py` 的 `__version__` 与要发布的版本一致（首次为 `"0.1.0"`）。
+2. 在 `CHANGELOG.md` 顶部新增该版本条目，文末链接指向真实 tag。
 3. 运行回归清单（见“代码规范”一节）。
 
 ### 2. 本地打包
 
+直接执行打包命令（完整说明见「打包」一节）：
+
 ```powershell
-.\build_cli.ps1
-.\build_gui.ps1
+# CLI
+pyinstaller --onefile --console --clean --name mkstruct `
+  --icon "$PWD\resource\app.ico" `
+  --distpath dist/mkstruct --workpath build --specpath build `
+  mkstruct.py
+
+# GUI
+pyinstaller --onefile --windowed --clean --name mkstruct-gui `
+  --icon "$PWD\resource\app.ico" `
+  --add-data "$PWD\resource\app.ico;resource" `
+  --distpath dist/mkstruct-gui --workpath build --specpath build `
+  gui.py
 ```
+
+若已在项目根创建 `build_cli.ps1` / `build_gui.ps1`，直接运行它们即可。
 
 产物：
 
@@ -328,7 +342,7 @@ dist\mkstruct-gui\mkstruct-gui.exe
 ### 3. 本地验证
 
 ```powershell
-# CLI
+# CLI：版本号应与 CHANGELOG 一致
 dist\mkstruct\mkstruct.exe -V
 dist\mkstruct\mkstruct.exe --help
 dist\mkstruct\mkstruct.exe tree.txt -d .\tmp-out --dry-run
@@ -344,19 +358,20 @@ GUI 至少走一遍：打开文件 → 解析 → 预览 → 创建 → 深色�
 
 ```powershell
 git add .
-git commit -m "release: v1.4.0"
-git tag v1.4.0
+git commit -m "release: v0.1.0"
+git tag v0.1.0
 git push origin main
-git push origin v1.4.0
+git push origin v0.1.0
 ```
 
 `dist/`、`build/`、`*.spec` 已被 `.gitignore` 忽略，不会误提交。
+**tag 必须打在这一版提交上**，CHANGELOG 里的版本条目与 tag 要对应。
 
 ### 5. 创建 GitHub Release
 
 1. 打开仓库 → **Releases** → **Draft a new release**。
-2. **Choose a tag**：选刚推送的 `v1.4.0`。
-3. **Release title**：`v1.4.0`。
+2. **Choose a tag**：选刚推送的 `v0.1.0`。
+3. **Release title**：`v0.1.0`。
 4. **Describe this release**：从 `CHANGELOG.md` 对应条目复制。
 5. **Attach binaries**：把下面两个文件拖入上传区
    - `dist\mkstruct\mkstruct.exe`
@@ -367,7 +382,7 @@ git push origin v1.4.0
 
 ### 6. 若已配置 GitHub Actions（可选）
 
-若仓库包含 `.github/workflows/release.yml`，推送 tag 后 CI 会自动构建两个 exe 并附加到对应 Release，可省去手动上传。工作流文件内容见下一节。
+若仓库包含 `.github/workflows/release.yml`，推送 tag 后 CI 会自动构建两个 exe 并附加到对应 Release，可省去手动上传。工作流内容见下一节。
 
 ---
 
@@ -401,15 +416,15 @@ jobs:
       - name: Build CLI
         run: |
           pyinstaller --onefile --console --clean --name mkstruct `
-            --icon "$PWD\resource\app.ico" `
+            --icon "${{ github.workspace }}\resource\app.ico" `
             --distpath dist/mkstruct --workpath build --specpath build `
             mkstruct.py
 
       - name: Build GUI
         run: |
           pyinstaller --onefile --windowed --clean --name mkstruct-gui `
-            --icon "$PWD\resource\app.ico" `
-            --add-data "$PWD\resource\app.ico;resource" `
+            --icon "${{ github.workspace }}\resource\app.ico" `
+            --add-data "${{ github.workspace }}\resource\app.ico;resource" `
             --distpath dist/mkstruct-gui --workpath build --specpath build `
             gui.py
 
@@ -422,4 +437,4 @@ jobs:
           generate_release_notes: true
 ```
 
-启用后，「发布流程」第 5 步可跳过，只需 push tag。
+启用后，「发布流程」第 5 步可跳过，只需 push tag。首次发布建议**手动创建 Release**，确认流程无误后再考虑接入 CI。
