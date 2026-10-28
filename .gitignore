@@ -1,0 +1,8 @@
+.project_context/
+.vscode/
+PROJECT_CONTEXT.md
+example/
+dist/
+build/
+tree.txt
+out/
